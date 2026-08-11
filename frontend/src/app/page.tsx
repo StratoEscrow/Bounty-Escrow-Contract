@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { WalletConnect } from "@/components/WalletConnect";
 import { CreateBounty } from "@/components/CreateBounty";
 import { BountyList } from "@/components/BountyList";
@@ -8,10 +8,10 @@ import { useWallet } from "@/lib/useWallet";
 
 export default function Home() {
   const { isConnected, address } = useWallet();
-  const [refresh, setRefresh] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const handleBountyCreated = () => {
-    setRefresh(prev => prev + 1);
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
@@ -34,7 +34,7 @@ export default function Home() {
 
             <section>
               <h2 className="text-2xl font-semibold mb-4">Active Bounties</h2>
-              <BountyList key={refresh} userAddress={address} />
+              <BountyList key={refreshKey} userAddress={address} />
             </section>
           </div>
         )}

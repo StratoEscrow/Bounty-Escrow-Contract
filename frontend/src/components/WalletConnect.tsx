@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useWallet, connectWallet, disconnectWallet } from "@/lib/useWallet";
 
 export function WalletConnect() {
-  const { isConnected, address, isLoading } = useWallet();
+  const { isConnected, address, isLoading, error } = useWallet();
   const [isConnecting, setIsConnecting] = useState(false);
 
   const handleConnect = async () => {
@@ -14,7 +14,8 @@ export function WalletConnect() {
       window.location.reload();
     } catch (error) {
       console.error("Failed to connect wallet:", error);
-      alert("Failed to connect wallet. Please make sure Freighter is installed.");
+      const errorMessage = error instanceof Error ? error.message : "Failed to connect wallet";
+      alert(errorMessage);
     } finally {
       setIsConnecting(false);
     }
@@ -26,6 +27,8 @@ export function WalletConnect() {
       window.location.reload();
     } catch (error) {
       console.error("Failed to disconnect wallet:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to disconnect wallet";
+      alert(errorMessage);
     }
   };
 
@@ -33,6 +36,21 @@ export function WalletConnect() {
     return (
       <div className="bg-gray-800 rounded-lg p-4">
         <p className="text-gray-400">Loading wallet status...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-900/50 border border-red-700 rounded-lg p-4">
+        <p className="text-red-200 text-sm">{error}</p>
+        <button
+          onClick={handleConnect}
+          disabled={isConnecting}
+          className="mt-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+        >
+          {isConnecting ? "Connecting..." : "Connect Freighter Wallet"}
+        </button>
       </div>
     );
   }

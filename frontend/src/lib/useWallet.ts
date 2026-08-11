@@ -21,6 +21,16 @@ export function useWallet(): WalletState {
   const checkConnection = async () => {
     try {
       setIsLoading(true);
+      setError(null);
+      
+      // Check if Freighter is installed
+      const isInstalled = await freighter.isAllowed();
+      if (!isInstalled) {
+        setError("Freighter wallet is not installed. Please install it to continue.");
+        setIsLoading(false);
+        return;
+      }
+
       const isConnected = await freighter.isConnected();
       setIsConnected(isConnected);
 
@@ -29,7 +39,9 @@ export function useWallet(): WalletState {
         setAddress(address);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to check wallet connection");
+      const errorMessage = err instanceof Error ? err.message : "Failed to check wallet connection";
+      setError(errorMessage);
+      console.error("Wallet connection error:", err);
     } finally {
       setIsLoading(false);
     }
@@ -46,9 +58,14 @@ export function useWallet(): WalletState {
 export async function connectWallet(): Promise<string> {
   try {
     const address = await freighter.connect();
+    if (!address) {
+      throw new Error("Failed to get wallet address");
+    }
     return address;
   } catch (err) {
-    throw new Error(err instanceof Error ? err.message : "Failed to connect wallet");
+    const errorMessage = err instanceof Error ? err.message : "Failed to connect wallet";
+    console.error("Wallet connection error:", err);
+    throw new Error(errorMessage);
   }
 }
 
@@ -56,15 +73,22 @@ export async function disconnectWallet(): Promise<void> {
   try {
     await freighter.disconnect();
   } catch (err) {
-    throw new Error(err instanceof Error ? err.message : "Failed to disconnect wallet");
+    const errorMessage = err instanceof Error ? err.message : "Failed to disconnect wallet";
+    console.error("Wallet disconnection error:", err);
+    throw new Error(errorMessage);
   }
 }
 
 export async function signTransaction(xdr: string): Promise<string> {
   try {
     const signedXDR = await freighter.signTransaction(xdr);
+    if (!signedXDR) {
+      throw new Error("Failed to sign transaction - no signed XDR returned");
+    }
     return signedXDR;
   } catch (err) {
-    throw new Error(err instanceof Error ? err.message : "Failed to sign transaction");
+    const errorMessage = err instanceof Error ? err.message : "Failed to sign transaction";
+    console.error("Transaction signing error:", err);
+    throw new Error(errorMessage);
   }
 }

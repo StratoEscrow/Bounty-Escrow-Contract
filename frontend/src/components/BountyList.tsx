@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Bounty, Submission, submitWork, approveSubmission, reclaimExpired } from "@/lib/contract";
+import { useState, useEffect } from "react";
+import { Bounty, Submission, submitWork, approveSubmission, reclaimExpired, getAllBounties, getSubmissions } from "@/lib/contract";
 import { useWallet } from "@/lib/useWallet";
 
 interface BountyListProps {
@@ -10,12 +10,52 @@ interface BountyListProps {
 
 export function BountyList({ userAddress }: BountyListProps) {
   const { address } = useWallet();
-  const [bounties] = useState<Bounty[]>([]); // This would be fetched from the contract
+  const [bounties, setBounties] = useState<Bounty[]>([]);
   const [selectedBounty, setSelectedBounty] = useState<Bounty | null>(null);
-  const [submissions] = useState<Submission[]>([]); // This would be fetched from the contract
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [proofLink, setProofLink] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchBounties();
+  }, []);
+
+  const fetchBounties = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const allBounties = await getAllBounties();
+      setBounties(allBounties);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to load bounties";
+      console.error("Error fetching bounties:", err);
+      setError(errorMessage);
+      // If it's a configuration error, show a helpful message
+      if (errorMessage.includes("Contract address not configured")) {
+        setError("Please configure the contract address in your environment variables to load bounties.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchSubmissions = async (bountyId: number) => {
+    try {
+      setError(null);
+      const bountySubmissions = await getSubmissions(bountyId);
+      setSubmissions(bountySubmissions);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to load submissions";
+      console.error("Error fetching submissions:", err);
+      setError(errorMessage);
+      // If it's a configuration error, show a helpful message
+      if (errorMessage.includes("Contract address not configured")) {
+        setError("Please configure the contract address in your environment variables to load submissions.");
+      }
+    }
+  };
 
   const handleSubmitWork = async (e: React.FormEvent | undefined, bountyId: number) => {
     if (e) e.preventDefault();
@@ -31,18 +71,32 @@ export function BountyList({ userAddress }: BountyListProps) {
       return;
     }
 
+    // Validate URL format
+    try {
+      new URL(proofLink);
+    } catch {
+      setError("Please provide a valid URL for the proof link");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      const signedXDR = await submitWork(address, {
+      const txHash = await submitWork(address, {
         bounty_id: bountyId,
         proof_link: proofLink,
       });
 
-      console.log("Signed XDR:", signedXDR);
-      alert("Transaction signed! Submit to network (integration needed)");
+      console.log("Transaction submitted:", txHash);
+      alert(`Work submitted successfully! Transaction hash: ${txHash}`);
       setProofLink("");
+      // Refresh submissions
+      await fetchSubmissions(bountyId);
+      // Refresh bounties to update submission count
+      await fetchBounties();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit work");
+      const errorMessage = err instanceof Error ? err.message : "Failed to submit work";
+      setError(errorMessage);
+      console.error("Work submission error:", err);
     } finally {
       setIsSubmitting(false);
     }
@@ -57,15 +111,19 @@ export function BountyList({ userAddress }: BountyListProps) {
     }
 
     try {
-      const signedXDR = await approveSubmission(address, {
+      const txHash = await approveSubmission(address, {
         bounty_id: bountyId,
         submission_id: submissionId,
       });
 
-      console.log("Signed XDR:", signedXDR);
-      alert("Transaction signed! Submit to network (integration needed)");
+      console.log("Transaction submitted:", txHash);
+      alert(`Submission approved successfully! Transaction hash: ${txHash}`);
+      // Refresh bounties to show updated status
+      await fetchBounties();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to approve submission");
+      const errorMessage = err instanceof Error ? err.message : "Failed to approve submission";
+      setError(errorMessage);
+      console.error("Approval error:", err);
     }
   };
 
@@ -78,16 +136,28 @@ export function BountyList({ userAddress }: BountyListProps) {
     }
 
     try {
-      const signedXDR = await reclaimExpired(address, {
+      const txHash = await reclaimExpired(address, {
         bounty_id: bountyId,
       });
 
-      console.log("Signed XDR:", signedXDR);
-      alert("Transaction signed! Submit to network (integration needed)");
+      console.log("Transaction submitted:", txHash);
+      alert(`Funds reclaimed successfully! Transaction hash: ${txHash}`);
+      // Refresh bounties to show updated status
+      await fetchBounties();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reclaim funds");
+      const errorMessage = err instanceof Error ? err.message : "Failed to reclaim funds";
+      setError(errorMessage);
+      console.error("Reclaim error:", err);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="bg-gray-800 rounded-lg p-8 text-center">
+        <p className="text-gray-400">Loading bounties...</p>
+      </div>
+    );
+  }
 
   if (bounties.length === 0) {
     return (
@@ -126,7 +196,15 @@ export function BountyList({ userAddress }: BountyListProps) {
 
           <div className="flex gap-2 mt-4">
             <button
-              onClick={() => setSelectedBounty(selectedBounty?.id === bounty.id ? null : bounty)}
+              onClick={() => {
+                if (selectedBounty?.id === bounty.id) {
+                  setSelectedBounty(null);
+                  setSubmissions([]);
+                } else {
+                  setSelectedBounty(bounty);
+                  fetchSubmissions(bounty.id);
+                }
+              }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
             >
               {selectedBounty?.id === bounty.id ? "Hide Submissions" : "View Submissions"}

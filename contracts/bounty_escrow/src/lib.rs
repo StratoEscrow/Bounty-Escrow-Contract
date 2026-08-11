@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, contracterror, Address, Env, String, Vec, Map, Symbol};
+use soroban_sdk::{contract, contractimpl, contracttype, contracterror, Address, Env, String, Vec, Map, Symbol, token};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -72,6 +72,11 @@ impl BountyEscrowContract {
         if reward_amount <= 0 {
             panic!("{}", Error::InvalidAmount);
         }
+
+        // Transfer tokens from sponsor to contract
+        let token_client = token::Client::new(&env, &token_address);
+        let contract_address = env.current_contract_address();
+        token_client.transfer(&sponsor, &contract_address, &reward_amount);
 
         let bounty_id = env.storage().instance().get(&BOUNTY_COUNTER).unwrap_or(0) + 1;
         env.storage().instance().set(&BOUNTY_COUNTER, &bounty_id);
@@ -170,6 +175,11 @@ impl BountyEscrowContract {
             panic!("{}", Error::SubmissionNotFound);
         }
 
+        // Transfer locked tokens to the contributor
+        let token_client = token::Client::new(&env, &bounty.token_address);
+        let contract_address = env.current_contract_address();
+        token_client.transfer(&contract_address, &submission.contributor, &bounty.reward_amount);
+
         bounty.status = BountyStatus::Approved;
         bounty.approved_submission_id = Some(submission_id);
         bounties.set(bounty_id, bounty);
@@ -202,6 +212,11 @@ impl BountyEscrowContract {
         if current_time <= bounty.deadline + dispute_window {
             panic!("{}", Error::DeadlineNotReached);
         }
+
+        // Refund tokens to the sponsor
+        let token_client = token::Client::new(&env, &bounty.token_address);
+        let contract_address = env.current_contract_address();
+        token_client.transfer(&contract_address, &bounty.sponsor, &bounty.reward_amount);
 
         bounty.status = BountyStatus::Reclaimed;
         bounties.set(bounty_id, bounty);

@@ -31,20 +31,39 @@ export function CreateBounty({ onBountyCreated }: CreateBountyProps) {
       return;
     }
 
+    // Validate token address format
+    if (!tokenAddress.startsWith('G') || tokenAddress.length !== 56) {
+      setError("Invalid Stellar address format");
+      return;
+    }
+
+    // Validate reward amount
+    const amount = parseFloat(rewardAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setError("Reward amount must be a positive number");
+      return;
+    }
+
+    // Validate deadline
+    const deadlineDate = new Date(deadline);
+    if (deadlineDate <= new Date()) {
+      setError("Deadline must be in the future");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
-      const deadlineTimestamp = Math.floor(new Date(deadline).getTime() / 1000);
-      const signedXDR = await createBounty(address, {
+      const deadlineTimestamp = Math.floor(deadlineDate.getTime() / 1000);
+      const txHash = await createBounty(address, {
         title,
         token_address: tokenAddress,
         reward_amount: rewardAmount,
         deadline: deadlineTimestamp,
       });
 
-      // Here you would submit the signed transaction to the network
-      console.log("Signed XDR:", signedXDR);
-      alert("Transaction signed! Submit to network (integration needed)");
+      console.log("Transaction submitted:", txHash);
+      alert(`Bounty created successfully! Transaction hash: ${txHash}`);
 
       // Reset form
       setTitle("");
@@ -53,7 +72,9 @@ export function CreateBounty({ onBountyCreated }: CreateBountyProps) {
       setDeadline("");
       onBountyCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create bounty");
+      const errorMessage = err instanceof Error ? err.message : "Failed to create bounty";
+      setError(errorMessage);
+      console.error("Bounty creation error:", err);
     } finally {
       setIsSubmitting(false);
     }
