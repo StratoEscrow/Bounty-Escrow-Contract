@@ -11,16 +11,43 @@ interface BountyListProps {
 export function BountyList({ userAddress }: BountyListProps) {
   const { address } = useWallet();
   const [bounties, setBounties] = useState<Bounty[]>([]);
+  const [filteredBounties, setFilteredBounties] = useState<Bounty[]>([]);
   const [selectedBounty, setSelectedBounty] = useState<Bounty | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [proofLink, setProofLink] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"All" | "Open" | "Approved" | "Reclaimed">("All");
 
   useEffect(() => {
     fetchBounties();
   }, []);
+
+  useEffect(() => {
+    filterBounties();
+  }, [bounties, searchTerm, statusFilter]);
+
+  const filterBounties = () => {
+    let filtered = bounties;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(bounty =>
+        bounty.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        bounty.id.toString().includes(searchTerm)
+      );
+    }
+
+    // Apply status filter
+    if (statusFilter !== "All") {
+      filtered = filtered.filter(bounty => bounty.status === statusFilter);
+    }
+
+    setFilteredBounties(filtered);
+  };
 
   const fetchBounties = async () => {
     try {
@@ -57,6 +84,11 @@ export function BountyList({ userAddress }: BountyListProps) {
     }
   };
 
+  const showSuccess = (message: string) => {
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
   const handleSubmitWork = async (e: React.FormEvent | undefined, bountyId: number) => {
     if (e) e.preventDefault();
     setError(null);
@@ -87,7 +119,7 @@ export function BountyList({ userAddress }: BountyListProps) {
       });
 
       console.log("Transaction submitted:", txHash);
-      alert(`Work submitted successfully! Transaction hash: ${txHash}`);
+      showSuccess(`Work submitted successfully! Transaction hash: ${txHash}`);
       setProofLink("");
       // Refresh submissions
       await fetchSubmissions(bountyId);
@@ -117,7 +149,7 @@ export function BountyList({ userAddress }: BountyListProps) {
       });
 
       console.log("Transaction submitted:", txHash);
-      alert(`Submission approved successfully! Transaction hash: ${txHash}`);
+      showSuccess(`Submission approved successfully! Transaction hash: ${txHash}`);
       // Refresh bounties to show updated status
       await fetchBounties();
     } catch (err) {
@@ -141,7 +173,7 @@ export function BountyList({ userAddress }: BountyListProps) {
       });
 
       console.log("Transaction submitted:", txHash);
-      alert(`Funds reclaimed successfully! Transaction hash: ${txHash}`);
+      showSuccess(`Funds reclaimed successfully! Transaction hash: ${txHash}`);
       // Refresh bounties to show updated status
       await fetchBounties();
     } catch (err) {
@@ -154,34 +186,85 @@ export function BountyList({ userAddress }: BountyListProps) {
   if (isLoading) {
     return (
       <div className="bg-gray-800 rounded-lg p-8 text-center">
-        <p className="text-gray-400">Loading bounties...</p>
+        <div className="flex flex-col items-center justify-center">
+          <svg className="animate-spin h-8 w-8 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="text-gray-400">Loading bounties...</p>
+        </div>
       </div>
     );
   }
 
-  if (bounties.length === 0) {
+  if (filteredBounties.length === 0) {
     return (
       <div className="bg-gray-800 rounded-lg p-8 text-center">
-        <p className="text-gray-400">No bounties found. Create one to get started!</p>
+        <p className="text-gray-400">
+          {bounties.length === 0 
+            ? "No bounties found. Create one to get started!" 
+            : "No bounties match your search criteria."}
+        </p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {/* Search and Filter Controls */}
+      <div className="bg-gray-800 rounded-lg p-4 space-y-4">
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Search bounties..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "All" | "Open" | "Approved" | "Reclaimed")}
+            className="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
+          >
+            <option value="All">All Status</option>
+            <option value="Open">Open</option>
+            <option value="Approved">Approved</option>
+            <option value="Reclaimed">Reclaimed</option>
+          </select>
+        </div>
+        <p className="text-sm text-gray-400">
+          Showing {filteredBounties.length} of {bounties.length} bounties
+        </p>
+      </div>
+
       {error && (
-        <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg">
+        <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg animate-pulse">
           {error}
         </div>
       )}
 
-      {bounties.map((bounty) => (
+      {successMessage && (
+        <div className="bg-green-900/50 border border-green-700 text-green-200 px-4 py-2 rounded-lg animate-pulse">
+          {successMessage}
+        </div>
+      )}
+
+      {filteredBounties.map((bounty) => (
         <div key={bounty.id} className="bg-gray-800 rounded-lg p-6">
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="text-xl font-semibold">{bounty.title}</h3>
               <p className="text-gray-400 text-sm mt-1">
-                ID: {bounty.id} • Status: {bounty.status}
+                ID: {bounty.id} • Status:{" "}
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  bounty.status === "Open" ? "bg-green-900/50 text-green-300" :
+                  bounty.status === "Approved" ? "bg-blue-900/50 text-blue-300" :
+                  "bg-yellow-900/50 text-yellow-300"
+                }`}>
+                  {bounty.status}
+                </span>
               </p>
             </div>
             <div className="text-right">
@@ -190,6 +273,9 @@ export function BountyList({ userAddress }: BountyListProps) {
               </p>
               <p className="text-sm text-gray-400">
                 Deadline: {new Date(bounty.deadline * 1000).toLocaleDateString()}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Created: {new Date(bounty.created_at * 1000).toLocaleDateString()}
               </p>
             </div>
           </div>
@@ -235,9 +321,19 @@ export function BountyList({ userAddress }: BountyListProps) {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  {isSubmitting ? "Submitting..." : "Submit"}
+                  {isSubmitting ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Submitting...
+                    </span>
+                  ) : (
+                    "Submit"
+                  )}
                 </button>
               </form>
 
